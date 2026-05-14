@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import liff from "@line/liff";
 
 export default function App() {
   const canvasRef = useRef(null);
@@ -19,7 +20,10 @@ export default function App() {
     const duration = 1200;
 
     const tick = () => {
-      const progress = Math.min(100, ((performance.now() - start) / duration) * 100);
+      const progress = Math.min(
+        100,
+        ((performance.now() - start) / duration) * 100
+      );
       setLoading(progress);
       if (progress < 100) rafRef.current = requestAnimationFrame(tick);
     };
@@ -55,7 +59,7 @@ export default function App() {
       spawnTimer: 0,
       lastTime: performance.now(),
       fruits: [],
-      basket: { x: 0, y: 0, width: 100, height: 34 },
+      basket: { x: 0, y: 0, width: 92, height: 34 },
     });
 
     gameRef.current = createGame();
@@ -71,7 +75,7 @@ export default function App() {
 
       game.width = rect.width;
       game.height = rect.height;
-      game.basket.width = Math.min(116, rect.width * 0.32);
+      game.basket.width = Math.min(92, rect.width * 0.26);
       game.basket.height = Math.max(32, rect.height * 0.044);
       game.basket.x = rect.width / 2;
       game.basket.y = rect.height - Math.max(96, rect.height * 0.13);
@@ -90,28 +94,43 @@ export default function App() {
 
     const handlePointerDown = (event) => {
       event.preventDefault();
-      canvas.setPointerCapture?.(event.pointerId);
+
+      if (typeof canvas.setPointerCapture === "function") {
+        canvas.setPointerCapture(event.pointerId);
+      }
+
       moveBasketTo(event.clientX);
     };
 
     const handlePointerMove = (event) => {
       event.preventDefault();
-      if (event.buttons === 0 && event.pointerType === "mouse") return;
+
+      if (event.pointerType === "mouse" && event.buttons === 0) {
+        return;
+      }
+
       moveBasketTo(event.clientX);
     };
 
     const handlePointerUp = (event) => {
-      canvas.releasePointerCapture?.(event.pointerId);
+      if (typeof canvas.releasePointerCapture === "function") {
+        canvas.releasePointerCapture(event.pointerId);
+      }
     };
 
     const spawnFruit = (game) => {
       const size = 28 + Math.random() * 14;
+      const isBomb = Math.random() < Math.min(0.28, 0.12 + game.elapsed * 0.003);
+
       game.fruits.push({
         x: size + Math.random() * Math.max(1, game.width - size * 2),
         y: -size,
         size,
         speed: 118 + game.elapsed * 5.8 + Math.random() * 66,
-        icon: fruitIcons[Math.floor(Math.random() * fruitIcons.length)],
+        icon: isBomb
+          ? "💣"
+          : fruitIcons[Math.floor(Math.random() * fruitIcons.length)],
+        type: isBomb ? "bomb" : "fruit",
         spin: Math.random() * Math.PI * 2,
       });
     };
@@ -166,7 +185,13 @@ export default function App() {
       ctx.translate(basket.x, basket.y);
 
       ctx.fillStyle = "#bf702b";
-      roundedRect(-basket.width / 2, -basket.height / 2, basket.width, basket.height, 12);
+      roundedRect(
+        -basket.width / 2,
+        -basket.height / 2,
+        basket.width,
+        basket.height,
+        12
+      );
       ctx.fill();
 
       ctx.strokeStyle = "#7d4319";
@@ -231,18 +256,34 @@ export default function App() {
           fruit.y <= basket.y + basket.height;
 
         if (caught) {
+          if (fruit.type === "bomb") {
+            game.lives -= 1;
+            setLivesView(game.lives);
+
+            if (game.lives <= 0) {
+              game.lives = 0;
+              setFinalScore(game.score);
+              setScreen("result");
+            }
+
+            return false;
+          }
+
           game.score += 10;
           setScoreView(game.score);
           return false;
         }
 
         if (fruit.y - fruit.size > game.height) {
-          game.lives -= 1;
-          setLivesView(game.lives);
+          if (fruit.type !== "bomb") {
+            game.lives -= 1;
+            setLivesView(game.lives);
 
-          if (game.lives <= 0) {
-            setFinalScore(game.score);
-            setScreen("result");
+            if (game.lives <= 0) {
+              game.lives = 0;
+              setFinalScore(game.score);
+              setScreen("result");
+            }
           }
 
           return false;
@@ -265,7 +306,11 @@ export default function App() {
     resize();
 
     window.addEventListener("resize", resize);
-    window.visualViewport?.addEventListener("resize", resize);
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", resize);
+    }
+
     canvas.addEventListener("pointerdown", handlePointerDown, { passive: false });
     canvas.addEventListener("pointermove", handlePointerMove, { passive: false });
     canvas.addEventListener("pointerup", handlePointerUp);
@@ -276,7 +321,11 @@ export default function App() {
     return () => {
       cancelAnimationFrame(rafRef.current);
       window.removeEventListener("resize", resize);
-      window.visualViewport?.removeEventListener("resize", resize);
+
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener("resize", resize);
+      }
+
       canvas.removeEventListener("pointerdown", handlePointerDown);
       canvas.removeEventListener("pointermove", handlePointerMove);
       canvas.removeEventListener("pointerup", handlePointerUp);
@@ -289,6 +338,158 @@ export default function App() {
     setLivesView(3);
     setFinalScore(0);
     setScreen("game");
+  };
+
+  const handleShare = () => {
+    const score = finalScore;
+    const iconUrl =
+      "https://raw.githubusercontent.com/yukiyasu-macky/minigame001/refs/heads/main/x_icon.png";
+
+    if (liff.isApiAvailable("shareTargetPicker")) {
+      liff
+        .shareTargetPicker([
+          {
+            type: "flex",
+            altText: "ゲームスコアをシェア！",
+            contents: {
+              type: "bubble",
+              hero: {
+                type: "image",
+                url: iconUrl,
+                size: "full",
+                aspectRatio: "20:13",
+                aspectMode: "cover",
+              },
+              body: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                  {
+                    type: "box",
+                    layout: "vertical",
+                    contents: [
+                      {
+                        type: "text",
+                        text: `ゲームで${score}点をとったよ！`,
+                        size: "lg",
+                        color: "#000000",
+                        weight: "bold",
+                        wrap: true,
+                      },
+                    ],
+                    spacing: "none",
+                  },
+                  {
+                    type: "box",
+                    layout: "vertical",
+                    contents: [
+                      {
+                        type: "text",
+                        text: "手軽に遊べるミニゲーム",
+                        size: "sm",
+                        color: "#999999",
+                        wrap: true,
+                      },
+                    ],
+                    spacing: "none",
+                  },
+                  {
+                    type: "box",
+                    layout: "vertical",
+                    contents: [
+                      {
+                        type: "button",
+                        action: {
+                          type: "uri",
+                          label: "遊んでみる！",
+                          uri: `https://miniapp.line.me/${liff.id}`,
+                        },
+                        style: "primary",
+                        height: "md",
+                        color: "#17c950",
+                      },
+                      {
+                        type: "button",
+                        action: {
+                          type: "uri",
+                          label: "シェアする",
+                          uri: `https://miniapp.line.me/${liff.id}/share`,
+                        },
+                        style: "link",
+                        height: "md",
+                        color: "#469fd6",
+                      },
+                    ],
+                    spacing: "xs",
+                    margin: "lg",
+                  },
+                ],
+                spacing: "md",
+              },
+              footer: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                  {
+                    type: "separator",
+                    color: "#f0f0f0",
+                  },
+                  {
+                    type: "box",
+                    layout: "horizontal",
+                    contents: [
+                      {
+                        type: "image",
+                        url: iconUrl,
+                        flex: 1,
+                        gravity: "center",
+                      },
+                      {
+                        type: "text",
+                        text: "ゲーム",
+                        flex: 19,
+                        size: "xs",
+                        color: "#999999",
+                        weight: "bold",
+                        gravity: "center",
+                        wrap: false,
+                      },
+                      {
+                        type: "image",
+                        url: "https://vos.line-scdn.net/service-notifier/footer_go_btn.png",
+                        flex: 1,
+                        gravity: "center",
+                        size: "xxs",
+                        action: {
+                          type: "uri",
+                          label: "action",
+                          uri: `https://miniapp.line.me/${liff.id}`,
+                        },
+                      },
+                    ],
+                    flex: 1,
+                    spacing: "md",
+                    margin: "md",
+                  },
+                ],
+              },
+            },
+          },
+        ])
+        .then((res) => {
+          if (res) {
+            alert("シェアしました！");
+          } else {
+            alert("シェアをキャンセルしました。");
+          }
+        })
+        .catch((error) => {
+          console.error(error);
+          alert("エラーが発生しました。");
+        });
+    } else {
+      alert("この環境ではシェア機能を利用できません。");
+    }
   };
 
   return (
@@ -317,7 +518,9 @@ export default function App() {
         {screen === "game" && (
           <>
             <canvas ref={canvasRef} className="gameCanvas" />
-            <div className="srOnly">Score {scoreView} Life {livesView}</div>
+            <div className="srOnly">
+              Score {scoreView} Life {livesView}
+            </div>
           </>
         )}
 
@@ -327,6 +530,11 @@ export default function App() {
             <h1>Result</h1>
             <p className="scoreLabel">FINAL SCORE</p>
             <div className="finalScore">{finalScore}</div>
+
+            <button className="shareButton" type="button" onClick={handleShare}>
+              シェアする！
+            </button>
+
             <button className="primaryButton" type="button" onClick={startGame}>
               もう一度遊ぶ
             </button>
@@ -348,6 +556,10 @@ export default function App() {
         * {
           box-sizing: border-box;
           -webkit-tap-highlight-color: transparent;
+        }
+
+        button {
+          font: inherit;
         }
 
         .app {
@@ -452,24 +664,42 @@ export default function App() {
           font-weight: 800;
         }
 
-        .primaryButton {
-          margin-top: 22px;
+        .primaryButton,
+        .shareButton {
           min-width: 190px;
           min-height: 54px;
           border: 0;
           border-radius: 999px;
           padding: 14px 26px;
           color: #fff;
-          background: #ff6464;
           font-size: 18px;
           font-weight: 900;
-          box-shadow: 0 7px 0 #c94545, 0 16px 28px rgba(0,0,0,0.22);
           touch-action: manipulation;
         }
 
-        .primaryButton:active {
+        .primaryButton {
+          margin-top: 22px;
+          background: #ff6464;
+          box-shadow: 0 7px 0 #c94545, 0 16px 28px rgba(0,0,0,0.22);
+        }
+
+        .shareButton {
+          margin-top: 16px;
+          background: #17c950;
+          box-shadow: 0 7px 0 #11963c, 0 16px 28px rgba(0,0,0,0.2);
+        }
+
+        .primaryButton:active,
+        .shareButton:active {
           transform: translateY(4px);
+        }
+
+        .primaryButton:active {
           box-shadow: 0 3px 0 #c94545, 0 10px 20px rgba(0,0,0,0.18);
+        }
+
+        .shareButton:active {
+          box-shadow: 0 3px 0 #11963c, 0 10px 20px rgba(0,0,0,0.18);
         }
 
         .scoreLabel {
