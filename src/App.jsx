@@ -497,8 +497,8 @@ export default function App() {
       <section className="phoneFrame">
         {screen === "title" && (
           <div className="panel titleScreen">
+            <img className="titleLogo" src="/title_logo.png" alt="MINI GAMES" />
             <div className="fruitBurst">🍎 🍊 🍓</div>
-            <h1>Fruit Catch!</h1>
             <p>落ちてくるフルーツをカゴでキャッチ</p>
 
             <div className="loadingTrack">
@@ -618,9 +618,22 @@ export default function App() {
             linear-gradient(180deg, #72ddff 0%, #fff0a6 58%, #91f1a4 100%);
         }
 
+        .titleScreen {
+          justify-content: flex-start;
+          padding-top: max(54px, calc(env(safe-area-inset-top) + 42px));
+        }
+
+        .titleLogo {
+          width: min(92%, 390px);
+          height: auto;
+          margin: 0 0 18px;
+          display: block;
+          filter: drop-shadow(0 12px 18px rgba(28, 35, 62, 0.22));
+        }
+
         .fruitBurst {
-          margin-bottom: 16px;
-          font-size: clamp(36px, 11vw, 58px);
+          margin-bottom: 10px;
+          font-size: clamp(34px, 10vw, 52px);
         }
 
         h1 {
@@ -634,7 +647,7 @@ export default function App() {
 
         p {
           max-width: 280px;
-          margin: 18px 0 28px;
+          margin: 12px 0 26px;
           font-size: 16px;
           font-weight: 700;
           line-height: 1.6;
